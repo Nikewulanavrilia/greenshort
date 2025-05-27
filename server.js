@@ -26,6 +26,10 @@ db.connect((err) => {
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.send("✅ Backend aktif");
+});
+
 
 app.post("/register", async (req, res) => {
   try {
