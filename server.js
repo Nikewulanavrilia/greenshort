@@ -6,22 +6,17 @@ const bcrypt = require("bcrypt");
 const app = express();
 const port = process.env.PORT || 8080;
 
-const db = mysql.createConnection({
+const db = mysql.createPool({
   host: process.env.MYSQL_HOST,
   user: process.env.MYSQL_USER,
   password: process.env.MYSQL_PASSWORD,
   database: process.env.MYSQL_DATABASE,
-  port: 3306
+  port: 3306,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
 
-// Cek koneksi database
-db.connect((err) => {
-  if (err) {
-    console.error("❌ Gagal terkoneksi ke database:", err.message);
-  } else {
-    console.log("✅ Berhasil terkoneksi ke database MySQL");
-  }
-});
 
 app.use(cors());
 app.use(express.json());
