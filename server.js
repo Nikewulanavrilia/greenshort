@@ -2,7 +2,11 @@ const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
-const banks = require ('./data/bankList');
+const crypto = require("crypto");
+const banks = require("./data/bankList");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -15,9 +19,8 @@ const db = mysql.createPool({
   port: 3306,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
 });
-
 
 app.use(cors());
 app.use(express.json());
@@ -25,14 +28,16 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.send("✅ Backend aktif");
 });
-app.get('/api/banks', (req, res) => {
+app.get("/api/banks", (req, res) => {
   res.json(banks);
 });
-app.post('/api/rekening', (req, res) => {
+app.post("/api/rekening", (req, res) => {
   const { no_rek, nama_bank, nama_pemilik, id_user } = req.body;
 
   if (!no_rek || !nama_bank || !nama_pemilik || !id_user) {
-    return res.status(400).json({ success: false, message: 'Data tidak lengkap' });
+    return res
+      .status(400)
+      .json({ success: false, message: "Data tidak lengkap" });
   }
 
   const sql = `
@@ -42,43 +47,51 @@ app.post('/api/rekening', (req, res) => {
 
   db.query(sql, [no_rek, nama_bank, nama_pemilik, id_user], (err, result) => {
     if (err) {
-      console.error('DB Error:', err);
-      return res.status(500).json({ success: false, message: 'Gagal menyimpan' });
+      console.error("DB Error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal menyimpan" });
     }
-    res.json({ success: true, message: 'Rekening disimpan' });
+    res.json({ success: true, message: "Rekening disimpan" });
   });
 });
-app.get('/api/rekening/:id_user', (req, res) => {
+app.get("/api/rekening/:id_user", (req, res) => {
   const { id_user } = req.params;
 
   const sql = "SELECT * FROM rekening WHERE id_user = ?";
   db.query(sql, [id_user], (err, results) => {
     if (err) {
       console.error("DB Error:", err);
-      return res.status(500).json({ success: false, message: "Gagal mengambil data rekening" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal mengambil data rekening" });
     }
 
     res.json({ success: true, data: results });
   });
 });
-app.delete('/api/rekening/:id', (req, res) => {
+app.delete("/api/rekening/:id", (req, res) => {
   const { id } = req.params;
 
   const sql = "DELETE FROM rekening WHERE id_rekening = ?";
   db.query(sql, [id], (err, result) => {
     if (err) {
       console.error("Delete Error:", err);
-      return res.status(500).json({ success: false, message: "Gagal menghapus rekening" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal menghapus rekening" });
     }
     res.json({ success: true, message: "Rekening dihapus" });
   });
 });
-app.put('/api/rekening/:id_rekening', (req, res) => {
+app.put("/api/rekening/:id_rekening", (req, res) => {
   const { id_rekening } = req.params;
   const { no_rek, nama_bank, nama_pemilik } = req.body;
 
   if (!no_rek || !nama_bank || !nama_pemilik) {
-    return res.status(400).json({ success: false, message: 'Data tidak lengkap' });
+    return res
+      .status(400)
+      .json({ success: false, message: "Data tidak lengkap" });
   }
 
   const sql = `
@@ -87,14 +100,20 @@ app.put('/api/rekening/:id_rekening', (req, res) => {
     WHERE id_rekening = ?
   `;
 
-  db.query(sql, [no_rek, nama_bank, nama_pemilik, id_rekening], (err, result) => {
-    if (err) {
-      console.error("DB Error:", err);
-      return res.status(500).json({ success: false, message: "Gagal mengupdate rekening" });
-    }
+  db.query(
+    sql,
+    [no_rek, nama_bank, nama_pemilik, id_rekening],
+    (err, result) => {
+      if (err) {
+        console.error("DB Error:", err);
+        return res
+          .status(500)
+          .json({ success: false, message: "Gagal mengupdate rekening" });
+      }
 
-    res.json({ success: true, message: "Rekening berhasil diperbarui" });
-  });
+      res.json({ success: true, message: "Rekening berhasil diperbarui" });
+    }
+  );
 });
 app.post("/register", async (req, res) => {
   try {
@@ -133,32 +152,27 @@ app.post("/register", async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const sql = 
-    "INSERT INTO users (nama_lengkap, email, no_hp, username, password, role) VALUES (?, ?, ?, ?, ?, ?)";
+    const sql =
+      "INSERT INTO users (nama_lengkap, email, no_hp, username, password, role) VALUES (?, ?, ?, ?, ?, ?)";
 
+    db.query(sql, [name, email, phone, username, hashed, "pengguna"], (err) => {
+      if (err) {
+        console.error("Database error:", err);
 
-    db.query(
-      sql,
-      [name, email, phone, username, hashed, 'pengguna'],
-      (err) => {
-        if (err) {
-          console.error("Database error:", err);
-
-          if (err.code === "ER_DUP_ENTRY") {
-            return res.status(409).json({
-              success: false,
-              message: "Email atau username sudah digunakan!",
-            });
-          }
-
-          return res
-            .status(500)
-            .json({ success: false, message: "Gagal mendaftar" });
+        if (err.code === "ER_DUP_ENTRY") {
+          return res.status(409).json({
+            success: false,
+            message: "Email atau username sudah digunakan!",
+          });
         }
 
-        res.json({ success: true, message: "Registrasi berhasil!" });
+        return res
+          .status(500)
+          .json({ success: false, message: "Gagal mendaftar" });
       }
-    );
+
+      res.json({ success: true, message: "Registrasi berhasil!" });
+    });
   } catch (error) {
     console.error("Unexpected error:", error);
     res
@@ -190,13 +204,19 @@ app.post("/login", (req, res) => {
 });
 app.get("/api/user/:id", (req, res) => {
   const userId = req.params.id;
-  const sql = "SELECT id_user, nama_lengkap, email, no_hp, username, role FROM users WHERE id_user = ?";
+  const sql =
+    "SELECT id_user, nama_lengkap, email, no_hp, username, role FROM users WHERE id_user = ?";
 
   db.query(sql, [userId], (err, results) => {
-    if (err) return res.status(500).json({ success: false, message: "Gagal mengambil data user" });
+    if (err)
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal mengambil data user" });
 
     if (results.length === 0) {
-      return res.status(404).json({ success: false, message: "User tidak ditemukan" });
+      return res
+        .status(404)
+        .json({ success: false, message: "User tidak ditemukan" });
     }
 
     res.json({ success: true, user: results[0] });
@@ -215,7 +235,9 @@ app.put("/api/user/:id_user", (req, res) => {
   db.query(sql, [nama_lengkap, username, email, no_hp, id_user], (err) => {
     if (err) {
       console.error("Update error:", err);
-      return res.status(500).json({ success: false, message: "Gagal update profil" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal update profil" });
     }
 
     res.json({ success: true, message: "Profil berhasil diperbarui" });
@@ -226,59 +248,90 @@ app.put("/api/user/password/:id_user", async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   // Ambil password lama dari DB
-  db.query("SELECT password FROM users WHERE id_user = ?", [id_user], async (err, results) => {
-    if (err) return res.status(500).json({ success: false, message: "Kesalahan server" });
-    if (results.length === 0) return res.status(404).json({ success: false, message: "User tidak ditemukan" });
+  db.query(
+    "SELECT password FROM users WHERE id_user = ?",
+    [id_user],
+    async (err, results) => {
+      if (err)
+        return res
+          .status(500)
+          .json({ success: false, message: "Kesalahan server" });
+      if (results.length === 0)
+        return res
+          .status(404)
+          .json({ success: false, message: "User tidak ditemukan" });
 
-    const match = await bcrypt.compare(currentPassword, results[0].password);
-    if (!match) {
-      return res.status(400).json({ success: false, message: "Password lama salah" });
+      const match = await bcrypt.compare(currentPassword, results[0].password);
+      if (!match) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Password lama salah" });
+      }
+
+      const hashed = await bcrypt.hash(newPassword, 10);
+
+      db.query(
+        "UPDATE users SET password = ? WHERE id_user = ?",
+        [hashed, id_user],
+        (err2) => {
+          if (err2)
+            return res
+              .status(500)
+              .json({ success: false, message: "Gagal update password" });
+          return res.json({
+            success: true,
+            message: "Password berhasil diubah",
+          });
+        }
+      );
     }
-
-    const hashed = await bcrypt.hash(newPassword, 10);
-
-    db.query("UPDATE users SET password = ? WHERE id_user = ?", [hashed, id_user], (err2) => {
-      if (err2) return res.status(500).json({ success: false, message: "Gagal update password" });
-      return res.json({ success: true, message: "Password berhasil diubah" });
-    });
-  });
+  );
 });
 
 // Tambahkan endpoints ini ke server.js Anda
 
 // POST - Insert alamat baru
-app.post('/api/alamat', (req, res) => {
-  const { 
-    provinsi, 
-    kabupaten, 
-    kecamatan, 
-    desa, 
-    alamat_lengkap, 
-    latitude, 
-    longitude, 
+app.post("/api/alamat", (req, res) => {
+  const {
+    provinsi,
+    kabupaten,
+    kecamatan,
+    desa,
+    alamat_lengkap,
+    latitude,
+    longitude,
     id_user,
   } = req.body;
 
   // Validasi data wajib
-  if (!provinsi || !kabupaten || !kecamatan || !desa || !alamat_lengkap || !latitude || !longitude || !id_user) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Semua field alamat wajib diisi' 
+  if (
+    !provinsi ||
+    !kabupaten ||
+    !kecamatan ||
+    !desa ||
+    !alamat_lengkap ||
+    !latitude ||
+    !longitude ||
+    !id_user
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Semua field alamat wajib diisi",
     });
   }
 
   // Validasi koordinat
   if (isNaN(latitude) || latitude < -90 || latitude > 90) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Latitude tidak valid' 
+    return res.status(400).json({
+      success: false,
+      message: "Latitude tidak valid",
     });
   }
 
   if (isNaN(longitude) || longitude < -180 || longitude > 180) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Longitude tidak valid' 
+    return res.status(400).json({
+      success: false,
+      message: "Longitude tidak valid",
     });
   }
 
@@ -286,17 +339,17 @@ app.post('/api/alamat', (req, res) => {
   const checkUserSql = "SELECT id_user FROM users WHERE id_user = ?";
   db.query(checkUserSql, [id_user], (err, userResults) => {
     if (err) {
-      console.error('Error checking user:', err);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Gagal memverifikasi user' 
+      console.error("Error checking user:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Gagal memverifikasi user",
       });
     }
 
     if (userResults.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'User tidak ditemukan' 
+      return res.status(404).json({
+        success: false,
+        message: "User tidak ditemukan",
       });
     }
 
@@ -309,36 +362,36 @@ app.post('/api/alamat', (req, res) => {
     `;
 
     const values = [
-      provinsi, 
-      kabupaten, 
-      kecamatan, 
-      desa, 
+      provinsi,
+      kabupaten,
+      kecamatan,
+      desa,
       alamat_lengkap,
-      parseFloat(latitude), 
-      parseFloat(longitude), 
-      id_user
+      parseFloat(latitude),
+      parseFloat(longitude),
+      id_user,
     ];
 
     db.query(insertSql, values, (err, result) => {
       if (err) {
-        console.error('Error inserting alamat:', err);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Gagal menyimpan alamat' 
+        console.error("Error inserting alamat:", err);
+        return res.status(500).json({
+          success: false,
+          message: "Gagal menyimpan alamat",
         });
       }
 
-      res.json({ 
-        success: true, 
-        message: 'Alamat berhasil disimpan',
-        id_alamat: result.insertId
+      res.json({
+        success: true,
+        message: "Alamat berhasil disimpan",
+        id_alamat: result.insertId,
       });
     });
   });
 });
 
 // GET - Ambil semua alamat user
-app.get('/api/alamat/:id_user', (req, res) => {
+app.get("/api/alamat/:id_user", (req, res) => {
   const { id_user } = req.params;
 
   const sql = `
@@ -360,28 +413,28 @@ app.get('/api/alamat/:id_user', (req, res) => {
   db.query(sql, [id_user], (err, results) => {
     if (err) {
       console.error("Error fetching alamat:", err);
-      return res.status(500).json({ 
-        success: false, 
-        message: "Gagal mengambil data alamat" 
+      return res.status(500).json({
+        success: false,
+        message: "Gagal mengambil data alamat",
       });
     }
 
-    res.json({ 
-      success: true, 
-      data: results 
+    res.json({
+      success: true,
+      data: results,
     });
   });
 });
 
 // DELETE - Hapus alamat berdasarkan id
-app.delete('/api/alamat/:id_alamat', (req, res) => {
+app.delete("/api/alamat/:id_alamat", (req, res) => {
   const { id_alamat } = req.params;
 
   // Validasi ID alamat
   if (!id_alamat || isNaN(id_alamat)) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'ID alamat tidak valid' 
+    return res.status(400).json({
+      success: false,
+      message: "ID alamat tidak valid",
     });
   }
 
@@ -390,16 +443,16 @@ app.delete('/api/alamat/:id_alamat', (req, res) => {
   db.query(checkSql, [id_alamat], (err, results) => {
     if (err) {
       console.error("Error checking alamat:", err);
-      return res.status(500).json({ 
-        success: false, 
-        message: "Gagal memverifikasi alamat" 
+      return res.status(500).json({
+        success: false,
+        message: "Gagal memverifikasi alamat",
       });
     }
 
     if (results.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Alamat tidak ditemukan" 
+      return res.status(404).json({
+        success: false,
+        message: "Alamat tidak ditemukan",
       });
     }
 
@@ -408,45 +461,45 @@ app.delete('/api/alamat/:id_alamat', (req, res) => {
     db.query(deleteSql, [id_alamat], (err, result) => {
       if (err) {
         console.error("Error deleting alamat:", err);
-        return res.status(500).json({ 
-          success: false, 
-          message: "Gagal menghapus alamat" 
+        return res.status(500).json({
+          success: false,
+          message: "Gagal menghapus alamat",
         });
       }
 
       if (result.affectedRows === 0) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Alamat tidak ditemukan atau sudah dihapus" 
+        return res.status(404).json({
+          success: false,
+          message: "Alamat tidak ditemukan atau sudah dihapus",
         });
       }
 
-      res.json({ 
-        success: true, 
-        message: "Alamat berhasil dihapus" 
+      res.json({
+        success: true,
+        message: "Alamat berhasil dihapus",
       });
     });
   });
 });
 
 // DELETE - Hapus alamat berdasarkan user (opsional - untuk menghapus semua alamat user)
-app.delete('/api/alamat/user/:id_user', (req, res) => {
+app.delete("/api/alamat/user/:id_user", (req, res) => {
   const { id_user } = req.params;
 
   const sql = "DELETE FROM alamat WHERE id_user = ?";
   db.query(sql, [id_user], (err, result) => {
     if (err) {
       console.error("Error deleting user alamat:", err);
-      return res.status(500).json({ 
-        success: false, 
-        message: "Gagal menghapus alamat user" 
+      return res.status(500).json({
+        success: false,
+        message: "Gagal menghapus alamat user",
       });
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `${result.affectedRows} alamat berhasil dihapus`,
-      deleted_count: result.affectedRows
+      deleted_count: result.affectedRows,
     });
   });
 });
@@ -482,16 +535,27 @@ app.post("/api/pengajuan", upload.single("gambar"), (req, res) => {
   const gambar_sampah = req.file ? `/uploads/${req.file.filename}` : null;
 
   if (!user_id || !kategori_sampah || !berat || !gambar_sampah) {
-    return res.status(400).json({ success: false, message: "Data tidak lengkap" });
+    return res
+      .status(400)
+      .json({ success: false, message: "Data tidak lengkap" });
   }
 
   const sql = `INSERT INTO penjualan_sampah (user_id, gambar_sampah, jenis_sampah, berat, status)
                VALUES (?, ?, ?, ?, 'pengajuan')`;
 
-  db.query(sql, [user_id, gambar_sampah, kategori_sampah, berat], (err, result) => {
-    if (err) return res.status(500).json({ success: false, message: "DB Error" });
-    res.json({ success: true, message: "Pengajuan berhasil", id_pengajuan: result.insertId });
-  });
+  db.query(
+    sql,
+    [user_id, gambar_sampah, kategori_sampah, berat],
+    (err, result) => {
+      if (err)
+        return res.status(500).json({ success: false, message: "DB Error" });
+      res.json({
+        success: true,
+        message: "Pengajuan berhasil",
+        id_pengajuan: result.insertId,
+      });
+    }
+  );
 });
 
 // Update endpoint di server.js untuk mengambil semua pengajuan berdasarkan user_id
@@ -499,12 +563,12 @@ app.post("/api/pengajuan", upload.single("gambar"), (req, res) => {
 
 app.get("/api/pengajuan/:user_id", (req, res) => {
   const { user_id } = req.params;
-  
+
   // Validasi user_id
   if (!user_id || isNaN(user_id)) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "User ID tidak valid" 
+    return res.status(400).json({
+      success: false,
+      message: "User ID tidak valid",
     });
   }
 
@@ -524,26 +588,28 @@ app.get("/api/pengajuan/:user_id", (req, res) => {
   db.query(sql, [user_id], (err, results) => {
     if (err) {
       console.error("Error fetching pengajuan:", err);
-      return res.status(500).json({ 
-        success: false, 
-        message: "Gagal mengambil data pengajuan" 
+      return res.status(500).json({
+        success: false,
+        message: "Gagal mengambil data pengajuan",
       });
     }
 
     // Format data untuk frontend
-    const formattedResults = results.map(item => ({
+    const formattedResults = results.map((item) => ({
       id: item.id_penjualan,
       user_id: item.user_id,
-      gambar_sampah: item.gambar_sampah ? item.gambar_sampah.replace('/uploads/', '') : null,
+      gambar_sampah: item.gambar_sampah
+        ? item.gambar_sampah.replace("/uploads/", "")
+        : null,
       jenis_sampah: item.jenis_sampah,
       berat: parseFloat(item.berat),
       status: item.status,
     }));
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       data: formattedResults,
-      count: formattedResults.length
+      count: formattedResults.length,
     });
   });
 });
@@ -605,7 +671,7 @@ app.get("/api/pengajuan/:user_id/status/:status", (req, res) => {
     });
   });
 });
-app.get('/api/penjualan-sampah', (req, res) => {
+app.get("/api/penjualan-sampah", (req, res) => {
   const sql = `
     SELECT 
       id,
@@ -621,7 +687,9 @@ app.get('/api/penjualan-sampah', (req, res) => {
   db.query(sql, (err, results) => {
     if (err) {
       console.error("DB Error:", err);
-      return res.status(500).json({ success: false, message: "Gagal ambil data penjualan" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal ambil data penjualan" });
     }
 
     res.json({ success: true, data: results });
@@ -649,17 +717,19 @@ app.get("/api/pengajuan/status/:status", (req, res) => {
   db.query(sql, [status], (err, results) => {
     if (err) {
       console.error("Error:", err);
-      return res.status(500).json({ success: false, message: "Gagal ambil data" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal ambil data" });
     }
 
-    const formatted = results.map(row => ({
+    const formatted = results.map((row) => ({
       id: row.id,
       name: row.name,
       phone: row.phone,
       category: row.jenis_sampah,
       weight: parseFloat(row.berat),
       image: row.gambar_sampah || null,
-      status: row.status
+      status: row.status,
     }));
 
     res.json({ success: true, data: formatted });
@@ -668,7 +738,7 @@ app.get("/api/pengajuan/status/:status", (req, res) => {
 app.get("/api/pengajuan/id/:id", (req, res) => {
   const { id } = req.params;
 
-    const sql = `
+  const sql = `
     SELECT 
       ps.id AS id,
       ps.user_id,
@@ -690,11 +760,15 @@ app.get("/api/pengajuan/id/:id", (req, res) => {
   db.query(sql, [id], (err, results) => {
     if (err) {
       console.error("Error:", err);
-      return res.status(500).json({ success: false, message: "Gagal mengambil data pengajuan" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal mengambil data pengajuan" });
     }
 
     if (results.length === 0) {
-      return res.status(404).json({ success: false, message: "Pengajuan tidak ditemukan" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Pengajuan tidak ditemukan" });
     }
 
     const row = results[0];
@@ -711,17 +785,19 @@ app.get("/api/pengajuan/id/:id", (req, res) => {
         price: row.harga_tawaran ? parseFloat(row.harga_tawaran) : 0,
         image: row.gambar_sampah || null,
         metode: row.opsi_pengiriman || "dijemput",
-        totalBayar: row.total ? parseFloat(row.total) : 0
-      }
+        totalBayar: row.total ? parseFloat(row.total) : 0,
+      },
     });
   });
 });
-app.put('/api/pengajuan/terima/:id', (req, res) => {
+app.put("/api/pengajuan/terima/:id", (req, res) => {
   const id = req.params.id;
-  const { alamat_id, harga_per_kg} = req.body;
+  const { alamat_id, harga_per_kg } = req.body;
 
-  if (!alamat_id || !harga_per_kg ) {
-    return res.status(400).json({ success: false, message: 'Data tidak lengkap' });
+  if (!alamat_id || !harga_per_kg) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Data tidak lengkap" });
   }
 
   const sql = `
@@ -736,18 +812,25 @@ app.put('/api/pengajuan/terima/:id', (req, res) => {
   db.query(sql, [alamat_id, harga_per_kg, id], (err, result) => {
     if (err) {
       console.error("DB Error:", err);
-      return res.status(500).json({ success: false, message: 'Gagal update pengajuan' });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal update pengajuan" });
     }
 
-    res.json({ success: true, message: 'Pengajuan berhasil diterima' });
+    res.json({ success: true, message: "Pengajuan berhasil diterima" });
   });
 });
-app.put('/api/pengajuan/tolak/:id', (req, res) => {
+app.put("/api/pengajuan/tolak/:id", (req, res) => {
   const { id } = req.params;
   const { reason } = req.body;
 
   if (!reason || reason.trim().length < 10) {
-    return res.status(400).json({ success: false, message: 'Alasan penolakan wajib diisi (min 10 karakter)' });
+    return res
+      .status(400)
+      .json({
+        success: false,
+        message: "Alasan penolakan wajib diisi (min 10 karakter)",
+      });
   }
 
   const sql = `
@@ -758,11 +841,13 @@ app.put('/api/pengajuan/tolak/:id', (req, res) => {
 
   db.query(sql, [reason.trim(), id], (err, result) => {
     if (err) {
-      console.error('DB Error (penolakan):', err);
-      return res.status(500).json({ success: false, message: 'Gagal menolak pengajuan' });
+      console.error("DB Error (penolakan):", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal menolak pengajuan" });
     }
 
-    res.json({ success: true, message: 'Pengajuan berhasil ditolak' });
+    res.json({ success: true, message: "Pengajuan berhasil ditolak" });
   });
 });
 app.get("/api/penawaran/status/semua", (req, res) => {
@@ -784,17 +869,19 @@ app.get("/api/penawaran/status/semua", (req, res) => {
   db.query(sql, (err, results) => {
     if (err) {
       console.error("❌ DB Error (penawaran):", err);
-      return res.status(500).json({ success: false, message: "Gagal mengambil data penawaran" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal mengambil data penawaran" });
     }
 
-    const data = results.map(row => ({
+    const data = results.map((row) => ({
       id: row.id,
       nama: row.name,
       jenisSampah: row.jenis_sampah,
       berat: parseFloat(row.berat),
       harga: parseFloat(row.harga_tawaran),
       total: parseFloat(row.total),
-      status: row.status 
+      status: row.status,
     }));
 
     res.json({ success: true, data });
@@ -823,11 +910,15 @@ app.get("/api/pengajuan/detail/:id", (req, res) => {
   db.query(sql, [id], (err, results) => {
     if (err) {
       console.error("Error:", err);
-      return res.status(500).json({ success: false, message: "Gagal mengambil data" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal mengambil data" });
     }
 
     if (results.length === 0) {
-      return res.status(404).json({ success: false, message: "Data tidak ditemukan" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Data tidak ditemukan" });
     }
 
     res.json({ success: true, data: results[0] });
@@ -844,7 +935,9 @@ app.get("/api/admin/alamat", (req, res) => {
   db.query(sql, (err, results) => {
     if (err) {
       console.error("Gagal ambil alamat admin:", err);
-      return res.status(500).json({ success: false, message: "Gagal mengambil data alamat admin" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal mengambil data alamat admin" });
     }
 
     res.json({ success: true, data: results });
@@ -853,8 +946,7 @@ app.get("/api/admin/alamat", (req, res) => {
 
 app.put("/api/pengajuan/mengantar/:id", (req, res) => {
   const { id } = req.params;
-  const { rekening_id, total, tanggal_awal, tanggal_akhir } =
-    req.body;
+  const { rekening_id, total, tanggal_awal, tanggal_akhir } = req.body;
 
   // Validasi input
   if (!rekening_id || !total || !tanggal_awal || !tanggal_akhir) {
@@ -884,12 +976,10 @@ app.put("/api/pengajuan/mengantar/:id", (req, res) => {
     (err, result) => {
       if (err) {
         console.error("DB Error (mengantar):", err);
-        return res
-          .status(500)
-          .json({
-            success: false,
-            message: "Gagal menyimpan data pengantaran",
-          });
+        return res.status(500).json({
+          success: false,
+          message: "Gagal menyimpan data pengantaran",
+        });
       }
 
       res.json({
@@ -1048,7 +1138,9 @@ app.get("/api/penjualan/selesai/tabel", (req, res) => {
   db.query(sql, (err, results) => {
     if (err) {
       console.error("❌ DB Error (tabel selesai):", err);
-      return res.status(500).json({ success: false, message: "Gagal ambil data selesai" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal ambil data selesai" });
     }
 
     const data = results.map((item) => ({
@@ -1058,10 +1150,10 @@ app.get("/api/penjualan/selesai/tabel", (req, res) => {
       berat: `${item.berat} kg`,
       harga: `Rp ${parseFloat(item.harga).toLocaleString()}`,
       totalHarga: `Rp ${parseFloat(item.total).toLocaleString()}`,
-      gambarSampah: item.gambar_sampah 
-        ? (item.gambar_sampah.startsWith('/uploads/') 
-            ? item.gambar_sampah 
-            : '/uploads/' + item.gambar_sampah)
+      gambarSampah: item.gambar_sampah
+        ? item.gambar_sampah.startsWith("/uploads/")
+          ? item.gambar_sampah
+          : "/uploads/" + item.gambar_sampah
         : null,
     }));
 
@@ -1099,46 +1191,54 @@ app.get("/api/pengiriman", (req, res) => {
   db.query(sql, (err, results) => {
     if (err) {
       console.error("❌ DB Error:", err);
-      return res.status(500).json({ success: false, message: "Gagal ambil data pengiriman" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Gagal ambil data pengiriman" });
     }
     res.json({ success: true, data: results });
   });
 });
-app.put('/api/penjualan/selesai/:id', (req, res, next) => {
-    upload.single("bukti_transaksi")(req, res, function (err) {
-        if (err instanceof multer.MulterError) {
-            console.error('❌ Multer Error:', err);
-            return res.status(400).json({ success: false, message: err.message });
-        } else if (err) {
-            console.error('❌ Unknown Upload Error:', err);
-            return res.status(500).json({ success: false, message: 'Unknown error uploading file' });
-        }
+app.put("/api/penjualan/selesai/:id", (req, res, next) => {
+  upload.single("bukti_transaksi")(req, res, function (err) {
+    if (err instanceof multer.MulterError) {
+      console.error("❌ Multer Error:", err);
+      return res.status(400).json({ success: false, message: err.message });
+    } else if (err) {
+      console.error("❌ Unknown Upload Error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Unknown error uploading file" });
+    }
 
-        // lanjut proses seperti biasa:
-        const { id } = req.params;
-        const file = req.file;
+    // lanjut proses seperti biasa:
+    const { id } = req.params;
+    const file = req.file;
 
-        if (!file) {
-            return res.status(400).json({ success: false, message: 'File tidak ditemukan' });
-        }
+    if (!file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "File tidak ditemukan" });
+    }
 
-        const buktiTFPath = `/uploads/${file.filename}`;
-        const sql = `
+    const buktiTFPath = `/uploads/${file.filename}`;
+    const sql = `
             UPDATE penjualan_sampah
             SET status = 'selesai',
                 bukti_tf = ?
             WHERE id = ?
         `;
 
-        db.query(sql, [buktiTFPath, id], (err, result) => {
-            if (err) {
-                console.error("❌ DB Error (update selesai):", err);
-                return res.status(500).json({ success: false, message: "Gagal update status selesai" });
-            }
+    db.query(sql, [buktiTFPath, id], (err, result) => {
+      if (err) {
+        console.error("❌ DB Error (update selesai):", err);
+        return res
+          .status(500)
+          .json({ success: false, message: "Gagal update status selesai" });
+      }
 
-            res.json({ success: true, message: "Berhasil selesai" });
-        });
+      res.json({ success: true, message: "Berhasil selesai" });
     });
+  });
 });
 
 app.listen(port, () => {
