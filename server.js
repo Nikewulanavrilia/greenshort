@@ -1240,6 +1240,27 @@ app.put("/api/penjualan/selesai/:id", (req, res, next) => {
     });
   });
 });
+// Endpoint Dashboard Admin Stats
+app.get("/api/dashboard-admin/stats", (req, res) => {
+  const sql = `
+    SELECT 
+      COUNT(*) AS total,
+      SUM(CASE WHEN status = 'pengajuan' THEN 1 ELSE 0 END) AS pengajuan,
+      SUM(CASE WHEN status = 'penawaran ditolak' THEN 1 ELSE 0 END) AS penawaran,
+      SUM(CASE WHEN status = 'penawaran diterima' THEN 1 ELSE 0 END) AS pengiriman,
+      SUM(CASE WHEN status = 'selesai' THEN 1 ELSE 0 END) AS selesai
+    FROM penjualan_sampah
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("❌ DB Error (dashboard-admin stats):", err);
+      return res.status(500).json({ success: false, message: "Gagal ambil data statistik admin" });
+    }
+
+    res.json({ success: true, data: results[0] });
+  });
+});
 
 app.listen(port, () => {
   console.log(`Server backend berjalan di http://localhost:${port}`);
