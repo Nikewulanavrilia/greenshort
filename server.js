@@ -1285,6 +1285,25 @@ app.get("/api/dashboard-user/stats/:user_id", (req, res) => {
     res.json({ success: true, data: results[0] });
   });
 });
+app.get("/api/penjualan/selesai/tabel/:user_id", (req, res) => {
+  const { user_id } = req.params;
+
+  const sql = `
+    SELECT ps.id, u.nama_lengkap AS nama_user, ps.jenis_sampah, ps.berat, ps.harga_tawaran, ps.total, ps.gambar_sampah, ps.status
+    FROM penjualan_sampah ps
+    JOIN users u ON ps.user_id = u.id_user
+    WHERE ps.status IN ('selesai', 'penawaran ditolak') AND ps.user_id = ?
+  `;
+
+  db.query(sql, [user_id], (err, results) => {
+    if (err) {
+      console.error("❌ DB Error (user selesai data):", err);
+      return res.status(500).json({ success: false, message: "Gagal ambil data selesai user" });
+    }
+
+    res.json({ success: true, data: results });
+  });
+});
 
 app.listen(port, () => {
   console.log(`Server backend berjalan di http://localhost:${port}`);
