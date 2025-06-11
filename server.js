@@ -1261,6 +1261,30 @@ app.get("/api/dashboard-admin/stats", (req, res) => {
     res.json({ success: true, data: results[0] });
   });
 });
+// Endpoint Dashboard Pengguna Stats
+app.get("/api/dashboard-user/stats/:user_id", (req, res) => {
+  const { user_id } = req.params;
+
+  const sql = `
+    SELECT 
+      SUM(CASE WHEN status = 'pengajuan' THEN 1 ELSE 0 END) AS menunggu_validasi,
+      SUM(CASE WHEN status = 'pengajuan diterima' THEN 1 ELSE 0 END) AS diterima,
+      SUM(CASE WHEN status = 'pengajuan ditolak' THEN 1 ELSE 0 END) AS ditolak,
+      SUM(CASE WHEN status = 'penawaran diterima' THEN 1 ELSE 0 END) AS penjemputan,
+      SUM(CASE WHEN status IN ('selesai', 'penawaran ditolak') THEN 1 ELSE 0 END) AS selesai
+    FROM penjualan_sampah
+    WHERE user_id = ?
+  `;
+
+  db.query(sql, [user_id], (err, results) => {
+    if (err) {
+      console.error("❌ DB Error (user dashboard stats):", err);
+      return res.status(500).json({ success: false, message: "Gagal ambil data statistik user" });
+    }
+
+    res.json({ success: true, data: results[0] });
+  });
+});
 
 app.listen(port, () => {
   console.log(`Server backend berjalan di http://localhost:${port}`);
